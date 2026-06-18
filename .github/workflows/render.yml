@@ -20,6 +20,11 @@ on:
         description: '任务ID，用于回调时标识'
         required: false
         type: string
+      narration_url:
+        description: 'TTS 旁白音频 COS 下载地址（可选，传入则合成音视频）'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   render:
@@ -45,11 +50,23 @@ jobs:
           SCENE_CLASS: ${{ inputs.scene_class }}
         run: |
           curl -fsSL "$SCENE_URL" -o scene.py
-          echo "--- scene.py 内容 ---"
-          head -30 scene.py
-          echo "--- 开始渲染 ---"
+          echo "--- 渲染开始 ---"
           manim -qh scene.py "$SCENE_CLASS" --disable_caching
           echo "--- 渲染完成 ---"
+
+      - name: 合成旁白音频（如有）
+        if: ${{ inputs.narration_url != '' }}
+        env:
+          NARRATION_URL: ${{ inputs.narration_url }}
+        run: |
+          echo "下载旁白音频..."
+          curl -fsSL "$NARRATION_URL" -o narration.mp3
+          echo "查找视频..."
+          VIDEO=$(find media/videos/scene -name "*.mp4" ! -path "*/partial_movie_files/*" | head -1)
+          echo "视频: $VIDEO"
+          echo "合成音视频..."
+          ffmpeg -i "$VIDEO" -i narration.mp3 -c:v copy -c:a aac -b:a 192k -shortest -y combined.mp4
+          echo "合成完成: combined.mp4"
 
       - name: 上传结果到 COS
         env:

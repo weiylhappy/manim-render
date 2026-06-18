@@ -12,19 +12,22 @@ REGION = os.environ["COS_REGION"]
 BUCKET = os.environ["COS_BUCKET"]
 TASK_ID = os.environ.get("TASK_ID", f"task_{int(time.time())}")
 
-VIDEO_DIR = "media/videos/scene"
 OUTPUT_FILE = None
 
-all_mp4 = []
-for root, dirs, files in os.walk(VIDEO_DIR):
-    for f in files:
-        if f.endswith(".mp4") and "partial_movie_files" not in root:
-            all_mp4.append(os.path.join(root, f))
+# 优先：ffmpeg 合成后的文件（带旁白）
+if os.path.exists("combined.mp4"):
+    OUTPUT_FILE = "combined.mp4"
+else:
+    all_mp4 = []
+    for root, dirs, files in os.walk(VIDEO_DIR):
+        for f in files:
+            if f.endswith(".mp4") and "partial_movie_files" not in root:
+                all_mp4.append(os.path.join(root, f))
 
-if all_mp4:
-    # 取文件最大的那个（合并后的完整视频）
-    OUTPUT_FILE = max(all_mp4, key=os.path.getsize)
-elif not OUTPUT_FILE:
+    if all_mp4:
+        OUTPUT_FILE = max(all_mp4, key=os.path.getsize)
+
+if OUTPUT_FILE is None:
     print("错误: 未找到渲染输出的 mp4 文件")
     sys.exit(1)
 
