@@ -25,6 +25,11 @@ on:
         required: false
         type: string
         default: ''
+      quality:
+        description: '渲染质量: l=480p15fps(调试), m=720p30fps, h=1080p60fps(正式)'
+        required: false
+        type: string
+        default: 'l'
 
 jobs:
   render:
@@ -48,10 +53,11 @@ jobs:
         env:
           SCENE_URL: ${{ inputs.cos_scene_url }}
           SCENE_CLASS: ${{ inputs.scene_class }}
+          QUALITY: ${{ inputs.quality }}
         run: |
           curl -fsSL "$SCENE_URL" -o scene.py
-          echo "--- 渲染开始 ---"
-          manim -qh scene.py "$SCENE_CLASS" --disable_caching
+          echo "--- 渲染开始 (质量: $QUALITY) ---"
+          manim -q"$QUALITY" scene.py "$SCENE_CLASS" --disable_caching
           echo "--- 渲染完成 ---"
 
       - name: 合成旁白音频（如有）
