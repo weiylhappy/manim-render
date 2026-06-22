@@ -40,12 +40,18 @@ config = CosConfig(Region=REGION, SecretId=SECRET_ID, SecretKey=SECRET_KEY)
 client = CosS3Client(config)
 
 cos_key = f"manim_render/{TASK_ID}.mp4"
+
+file_size_mb = os.path.getsize(OUTPUT_FILE) / (1024 * 1024)
+print(f"文件大小: {file_size_mb:.1f} MB")
+
+# 大文件使用分片上传（PartSize=10MB 最大，减少分片数提高成功率）
 client.upload_file(
     Bucket=BUCKET,
     LocalFilePath=OUTPUT_FILE,
     Key=cos_key,
-    PartSize=1,
-    MAXThread=4,
+    PartSize=10,       # 分片大小 10MB（最大值，减少分片数）
+    MAXThread=5,       # 并发线程
+    EnableMD5=False,   # 关闭 MD5 校验加速上传
 )
 
 result_url = client.get_presigned_url(

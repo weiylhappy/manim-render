@@ -74,6 +74,16 @@ jobs:
           ffmpeg -i "$VIDEO" -i narration.mp3 -c:v copy -c:a aac -b:a 192k -shortest -y combined.mp4
           echo "合成完成: combined.mp4"
 
+      - name: 压缩视频
+        run: |
+          VIDEO=$(find media/videos/scene -name "*.mp4" ! -path "*/partial_movie_files/*" | head -1)
+          echo "原始视频: $VIDEO"
+          echo "原始大小: $(du -h "$VIDEO" | cut -f1)"
+          ffmpeg -i "$VIDEO" -c:v libx264 -crf 28 -preset fast -c:a aac -b:a 64k -y compressed.mp4
+          echo "压缩后大小: $(du -h compressed.mp4 | cut -f1)"
+          mv compressed.mp4 "$VIDEO"
+          echo "已替换为压缩版本"
+
       - name: 上传结果到 COS
         env:
           COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
