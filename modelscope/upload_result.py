@@ -12,6 +12,9 @@ REGION = os.environ["COS_REGION"]
 BUCKET = os.environ["COS_BUCKET"]
 TASK_ID = os.environ.get("TASK_ID", f"task_{int(time.time())}")
 
+# Manim 输出目录
+VIDEO_DIR = "media/videos"
+
 OUTPUT_FILE = None
 
 # 优先：ffmpeg 合成后的文件（带旁白）
