@@ -94,10 +94,18 @@ jobs:
         run: |
           python modelscope/upload_result.py
 
-      - name: 回调通知
+      - name: 回调通知（成功）
         if: ${{ inputs.callback_url != '' }}
         env:
           CALLBACK_URL: ${{ inputs.callback_url }}
           TASK_ID: ${{ inputs.task_id }}
         run: |
           python modelscope/notify_callback.py
+
+      - name: 回调通知（失败）
+        if: ${{ failure() && inputs.callback_url != '' }}
+        env:
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          TASK_ID: ${{ inputs.task_id }}
+        run: |
+          python modelscope/notify_failure.py
