@@ -52,8 +52,13 @@ def process_video(
     algorithm: str,
     label: str = "",
     target_fps: float = None,
+    region: tuple = None,  # 只处理指定区域 (x1, y1, x2, y2)，None 表示全帧
 ) -> None:
-    """逐帧对视频进行 inpainting 处理"""
+    """逐帧对视频进行 inpainting 处理
+
+    Args:
+        region: 只处理指定区域 (x1, y1, x2, y2)，如果为 None 则处理全帧
+    """
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
         print(f"错误: 无法打开视频 {input_path}")
@@ -73,7 +78,16 @@ def process_video(
         target_fps = fps
         print(f"[{label}] 原始帧率处理: {fps:.1f}fps")
 
-    print(f"[{label}] 视频信息: {width}x{height}, 总帧数: {total_frames}")
+    # 确定处理区域
+    if region:
+        x1, y1, x2, y2 = region
+        roi_width = x2 - x1
+        roi_height = y2 - y1
+        print(f"[{label}] 视频信息: {width}x{height}, 总帧数: {total_frames}")
+        print(f"[{label}] 只处理区域: ({x1},{y1})-({x2},{y2}), 尺寸: {roi_width}x{roi_height}")
+        print(f"[{label}] 区域占比: {roi_width * roi_height / (width * height) * 100:.1f}%")
+    else:
+        print(f"[{label}] 视频信息: {width}x{height}, 总帧数: {total_frames}, 全帧处理")
 
     flag = get_inpaint_flag(algorithm)
     radius = 3 if algorithm == "ns" else 5
@@ -90,8 +104,18 @@ def process_video(
 
         # 按帧率跳帧
         if frame_idx % frame_skip == 0:
-            result = cv2.inpaint(frame, mask, inpaintRadius=radius, flags=flag)
-            out.write(result)
+            if region:
+                # 只处理指定区域（性能优化）
+                x1, y1, x2, y2 = region
+                roi = frame[y1:y2, x1:x2]
+                roi_mask = mask[y1:y2, x1:x2]
+                result_roi = cv2.inpaint(roi, roi_mask, inpaintRadius=radius, flags=flag)
+                frame[y1:y2, x1:x2] = result_roi
+            else:
+                # 全帧处理
+                frame = cv2.inpaint(frame, mask, inpaintRadius=radius, flags=flag)
+
+            out.write(frame)
             processed_count += 1
 
             if processed_count % 50 == 0:
@@ -167,10 +191,11 @@ def main():
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         cap.release()
 
+        wm_region = parse_region(args.watermark_region)
         wm_mask = create_mask(w, h, args.watermark_region)
         wm_output = "wm_removed.mp4"
         process_video(current_input, wm_output, wm_mask, args.algorithm,
-                     label="去水印", target_fps=args.target_fps)
+                     label="去水印", target_fps=args.target_fps, region=wm_region)
         current_input = wm_output
 
     # ── 去字幕 ──
@@ -184,9 +209,10 @@ def main():
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         cap.release()
 
+        sub_region = parse_region(args.subtitle_region)
         sub_mask = create_mask(w, h, args.subtitle_region)
         process_video(current_input, args.output, sub_mask, args.algorithm,
-                     label="去字幕", target_fps=args.target_fps)
+                     label="去字幕", target_fps=args.target_fps, region=sub_region)
     else:
         # 仅去水印时，最终输出就是水印处理后的文件
         import shutil
