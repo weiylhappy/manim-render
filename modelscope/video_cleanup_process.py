@@ -90,7 +90,15 @@ def process_video(
         print(f"[{label}] 视频信息: {width}x{height}, 总帧数: {total_frames}, 全帧处理")
 
     flag = get_inpaint_flag(algorithm)
-    radius = 3 if algorithm == "ns" else 5
+    # 动态调整 inpaint radius：根据 ROI 尺寸，范围 3-10
+    if region:
+        x1, y1, x2, y2 = region
+        roi_width = x2 - x1
+        roi_height = y2 - y1
+        min_dim = min(roi_width, roi_height)
+        radius = max(3, min(10, min_dim // 20))
+    else:
+        radius = 3 if algorithm == "ns" else 5
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(output_path, fourcc, target_fps, (width, height))
