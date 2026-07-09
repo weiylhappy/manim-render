@@ -51,14 +51,25 @@ cos_key = f"video_cleanup/{TASK_ID}.mp4"
 file_size_mb = os.path.getsize(OUTPUT_FILE) / (1024 * 1024)
 print(f"文件大小: {file_size_mb:.1f} MB")
 
-client.upload_file(
-    Bucket=BUCKET,
-    LocalFilePath=OUTPUT_FILE,
-    Key=cos_key,
-    PartSize=5,       # 分片大小 5MB
-    MAXThread=3,      # 并发线程数
-    EnableMD5=False,
-)
+# 小文件直接上传（不分片），避免分片上传在 Actions 环境下不稳定
+if file_size_mb < 20:
+    with open(OUTPUT_FILE, "rb") as fp:
+        client.put_object(
+            Bucket=BUCKET,
+            Body=fp,
+            Key=cos_key,
+        )
+    print("使用 put_object 直接上传（<20MB）")
+else:
+    client.upload_file(
+        Bucket=BUCKET,
+        LocalFilePath=OUTPUT_FILE,
+        Key=cos_key,
+        PartSize=5,
+        MAXThread=3,
+        EnableMD5=False,
+    )
+    print("使用 upload_file 分片上传")
 
 result_url = client.get_presigned_url(
     Method="GET",
