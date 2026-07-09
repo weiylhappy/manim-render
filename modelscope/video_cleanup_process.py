@@ -116,9 +116,8 @@ def process_video(
                 # 只处理指定区域（性能优化）
                 x1, y1, x2, y2 = region
                 roi = frame[y1:y2, x1:x2]
-                # 为 ROI 创建单独的 mask（全白，因为整个 ROI 都需要处理）
-                roi_height, roi_width = roi.shape[:2]
-                roi_mask = np.ones((roi_height, roi_width), dtype=np.uint8) * 255
+                # 从全帧 mask 中裁剪出对应的 ROI mask
+                roi_mask = mask[y1:y2, x1:x2]
                 result_roi = cv2.inpaint(roi, roi_mask, inpaintRadius=radius, flags=flag)
                 frame[y1:y2, x1:x2] = result_roi
             else:
