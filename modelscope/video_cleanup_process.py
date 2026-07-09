@@ -105,6 +105,31 @@ def process_video(
     print(f"[{label}] 完成: 处理 {processed_count} 帧 → {output_path}")
 
 
+def merge_audio(video_path: str, audio_source: str, output_path: str) -> None:
+    """用 ffmpeg 合并视频和音频"""
+    import subprocess
+    print(f"[音频合并] 从 {audio_source} 提取音频合并到 {video_path}")
+    try:
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path,      # 无声视频
+            "-i", audio_source,    # 原始视频（提取音频）
+            "-c:v", "copy",        # 视频流直接复制
+            "-c:a", "aac",         # 音频编码为 AAC
+            "-b:a", "128k",
+            "-map", "0:v:0",       # 取第一个输入的视频流
+            "-map", "1:a:0",       # 取第二个输入的音频流
+            "-shortest",           # 以较短的流为准
+            output_path
+        ]
+        subprocess.run(cmd, capture_output=True, check=True)
+        print(f"[音频合并] 完成 → {output_path}")
+    except subprocess.CalledProcessError as e:
+        print(f"[音频合并] 失败: {e}")
+        print(f"stderr: {e.stderr.decode() if e.stderr else 'N/A'}")
+        raise
+
+
 def main():
     parser = argparse.ArgumentParser(description="视频去水印/去字幕处理")
     parser.add_argument("--input", required=True, help="输入视频路径")
@@ -166,6 +191,13 @@ def main():
         # 仅去水印时，最终输出就是水印处理后的文件
         import shutil
         shutil.move(current_input, args.output)
+
+    # 合并原始视频的音频
+    if args.input != args.output:
+        temp_output = args.output + ".temp.mp4"
+        merge_audio(args.output, args.input, temp_output)
+        import os
+        os.replace(temp_output, args.output)
 
     print(f"✅ 全部处理完成: {args.output}")
 
