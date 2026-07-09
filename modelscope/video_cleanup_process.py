@@ -51,6 +51,7 @@ def process_video(
     mask: np.ndarray,
     algorithm: str,
     label: str = "",
+    target_fps: float = None,
 ) -> None:
     """逐帧对视频进行 inpainting 处理"""
     cap = cv2.VideoCapture(input_path)
@@ -62,29 +63,46 @@ def process_video(
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print(f"[{label}] 视频信息: {width}x{height}, {fps:.1f}fps, {total_frames}帧")
+
+    # 如果指定了目标帧率，降低帧率处理
+    if target_fps and target_fps < fps:
+        frame_skip = int(fps / target_fps)
+        print(f"[{label}] 降帧处理: {fps:.1f}fps → {target_fps:.1f}fps (每{frame_skip}帧处理1帧)")
+    else:
+        frame_skip = 1
+        target_fps = fps
+        print(f"[{label}] 原始帧率处理: {fps:.1f}fps")
+
+    print(f"[{label}] 视频信息: {width}x{height}, 总帧数: {total_frames}")
 
     flag = get_inpaint_flag(algorithm)
     radius = 3 if algorithm == "ns" else 5
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    out = cv2.VideoWriter(output_path, fourcc, target_fps, (width, height))
 
     frame_idx = 0
+    processed_count = 0
     while True:
         ret, frame = cap.read()
         if not ret:
             break
-        result = cv2.inpaint(frame, mask, inpaintRadius=radius, flags=flag)
-        out.write(result)
+
+        # 按帧率跳帧
+        if frame_idx % frame_skip == 0:
+            result = cv2.inpaint(frame, mask, inpaintRadius=radius, flags=flag)
+            out.write(result)
+            processed_count += 1
+
+            if processed_count % 50 == 0:
+                pct = int(processed_count * frame_skip * 100 / max(total_frames, 1))
+                print(f"[{label}] 进度: {processed_count} 帧 ({min(pct, 100)}%)")
+
         frame_idx += 1
-        if frame_idx % 150 == 0:
-            pct = 100 * frame_idx // max(total_frames, 1)
-            print(f"[{label}] 处理进度: {frame_idx}/{total_frames} ({pct}%)")
 
     cap.release()
     out.release()
-    print(f"[{label}] ✅ 完成: {frame_idx} 帧 → {output_path}")
+    print(f"[{label}] 完成: 处理 {processed_count} 帧 → {output_path}")
 
 
 def main():
@@ -98,6 +116,8 @@ def main():
     parser.add_argument("--algorithm", default="telea",
                         choices=["telea", "ns"],
                         help="telea(默认,快速) / ns(Navier-Stokes,慢但更平滑)")
+    parser.add_argument("--target_fps", type=float, default=None,
+                        help="目标帧率(如15)，降低可加速处理")
     args = parser.parse_args()
 
     print("═══════════════════════════════════════")
@@ -105,6 +125,7 @@ def main():
     print(f"修复算法: {args.algorithm}")
     print(f"水印区域: {args.watermark_region or '(无)'}")
     print(f"字幕区域: {args.subtitle_region or '(无)'}")
+    print(f"目标帧率: {args.target_fps or '保持原帧率'}")
     print("═══════════════════════════════════════")
 
     current_input = args.input
@@ -123,7 +144,8 @@ def main():
 
         wm_mask = create_mask(w, h, args.watermark_region)
         wm_output = "wm_removed.mp4"
-        process_video(current_input, wm_output, wm_mask, args.algorithm, label="去水印")
+        process_video(current_input, wm_output, wm_mask, args.algorithm,
+                     label="去水印", target_fps=args.target_fps)
         current_input = wm_output
 
     # ── 去字幕 ──
@@ -138,7 +160,8 @@ def main():
         cap.release()
 
         sub_mask = create_mask(w, h, args.subtitle_region)
-        process_video(current_input, args.output, sub_mask, args.algorithm, label="去字幕")
+        process_video(current_input, args.output, sub_mask, args.algorithm,
+                     label="去字幕", target_fps=args.target_fps)
     else:
         # 仅去水印时，最终输出就是水印处理后的文件
         import shutil

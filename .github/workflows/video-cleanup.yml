@@ -79,14 +79,15 @@ jobs:
             --cleanup_type "$CLEANUP_TYPE" \
             --watermark_region "$WATERMARK_REGION" \
             --subtitle_region "$SUBTITLE_REGION" \
-            --algorithm "$ALGORITHM"
+            --algorithm "$ALGORITHM" \
+            --target_fps 15
 
-      # ── 5. 压缩输出视频 ─────────────────────────────
+      # ── 5. 压缩输出视频（优化编码） ───────────────
       - name: 压缩输出视频
         run: |
-          echo "原始输出大小: $(du -h cleaned_output.mp4 | cut -f1)"
+          echo "处理完成大小: $(du -h cleaned_output.mp4 | cut -f1)"
           ffmpeg -y -i cleaned_output.mp4 \
-            -c:v libx264 -crf 28 -preset fast \
+            -c:v libx264 -crf 26 -preset ultrafast \
             -c:a aac -b:a 64k \
             -pix_fmt yuv420p \
             compressed_output.mp4 2>&1 | tail -3
