@@ -86,9 +86,10 @@ jobs:
       - name: 压缩输出视频
         run: |
           echo "处理完成大小: $(du -h cleaned_output.mp4 | cut -f1)"
+          # 压缩视频，保留原始音频流（不重新编码）
           ffmpeg -y -i cleaned_output.mp4 \
             -c:v libx264 -crf 26 -preset ultrafast \
-            -c:a aac -b:a 64k \
+            -c:a copy \
             -pix_fmt yuv420p \
             compressed_output.mp4 2>&1 | tail -3
           mv compressed_output.mp4 cleaned_output.mp4
@@ -103,6 +104,8 @@ jobs:
           COS_BUCKET: ${{ secrets.COS_BUCKET }}
           TASK_ID: ${{ inputs.task_id }}
         run: |
+          echo "检查输出文件..."
+          ls -lh *.mp4
           python3 modelscope/video_cleanup_upload.py
 
       # ── 7. 回调通知 ────────────────────────────────
