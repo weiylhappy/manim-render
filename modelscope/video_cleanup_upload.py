@@ -55,10 +55,9 @@ client.upload_file(
     Bucket=BUCKET,
     LocalFilePath=OUTPUT_FILE,
     Key=cos_key,
-    PartSize=5,       # 分片大小 5MB（默认是 8MB）
+    PartSize=5,       # 分片大小 5MB
     MAXThread=3,      # 并发线程数
     EnableMD5=False,
-    MAX_RETRY=5,      # 增加重试次数
 )
 
 result_url = client.get_presigned_url(

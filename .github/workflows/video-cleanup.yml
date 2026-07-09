@@ -82,14 +82,13 @@ jobs:
             --algorithm "$ALGORITHM" \
             --target_fps 15
 
-      # ── 5. 压缩输出视频（激进压缩减小文件） ───────────────
+      # ── 5. 压缩输出视频 ───────────────
       - name: 压缩输出视频
         run: |
           echo "处理完成大小: $(du -h cleaned_output.mp4 | cut -f1)"
-          # 激进压缩：降低分辨率到720p，更高CRF
+          # 简单压缩，不做分辨率缩放
           ffmpeg -y -i cleaned_output.mp4 \
-            -vf "scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease" \
-            -c:v libx264 -crf 30 -preset veryfast \
+            -c:v libx264 -crf 28 -preset veryfast \
             -c:a aac -b:a 64k \
             -pix_fmt yuv420p \
             compressed_output.mp4 2>&1 | tail -3
