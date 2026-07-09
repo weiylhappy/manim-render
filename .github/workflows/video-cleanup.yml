@@ -108,11 +108,31 @@ jobs:
       # ── 7. 回调通知 ────────────────────────────────
       - name: 回调通知（成功）
         if: ${{ inputs.callback_url != '' }}
-        env:
-          CALLBACK_URL: ${{ inputs.callback_url }}
-          TASK_ID: ${{ inputs.task_id }}
         run: |
-          python3 modelscope/video_cleanup_notify.py
+          # 从 GITHUB_ENV 读取 RESULT_URL 和 COS_KEY
+          source $GITHUB_ENV 2>/dev/null || true
+          python3 -c "
+          import os, json, urllib.request
+          callback_url = '${{ inputs.callback_url }}'
+          task_id = '${{ inputs.task_id }}'
+          result_url = os.environ.get('RESULT_URL', '')
+          cos_key = os.environ.get('COS_KEY', '')
+          if not result_url:
+              print('ERROR: RESULT_URL not found')
+              exit(1)
+          payload = json.dumps({
+              'task_id': task_id,
+              'result_url': result_url,
+              'cos_key': cos_key,
+              'status': 'completed'
+          }).encode()
+          req = urllib.request.Request(callback_url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+          try:
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  print(f'回调成功: {resp.status} - {resp.read().decode()}')
+          except Exception as e:
+              print(f'回调失败: {e}')
+          "
 
       - name: 回调通知（失败）
         if: ${{ failure() && inputs.callback_url != '' }}
