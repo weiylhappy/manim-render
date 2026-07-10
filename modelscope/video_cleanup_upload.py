@@ -1,5 +1,6 @@
 """
 在 GitHub Actions runner 中运行：上传处理后的视频到腾讯云 COS
+带重试机制，网络慢时自动重试 10 次
 """
 import os
 import sys
@@ -37,11 +38,31 @@ cos_key = f"video_cleanup/{TASK_ID}.mp4"
 file_size_mb = os.path.getsize(OUTPUT_FILE) / (1024 * 1024)
 print(f"文件大小: {file_size_mb:.1f} MB")
 
-if file_size_mb < 20:
-    with open(OUTPUT_FILE, "rb") as fp:
-        client.put_object(Bucket=BUCKET, Body=fp, Key=cos_key)
-else:
-    client.upload_file(Bucket=BUCKET, LocalFilePath=OUTPUT_FILE, Key=cos_key, PartSize=5, MAXThread=3, EnableMD5=False)
+MAX_RETRIES = 10
+uploaded = False
+
+for attempt in range(1, MAX_RETRIES + 1):
+    try:
+        if file_size_mb < 20:
+            print(f"[{attempt}/{MAX_RETRIES}] 使用 put_object 上传...")
+            with open(OUTPUT_FILE, "rb") as fp:
+                client.put_object(Bucket=BUCKET, Body=fp, Key=cos_key)
+        else:
+            print(f"[{attempt}/{MAX_RETRIES}] 使用分片上传...")
+            client.upload_file(Bucket=BUCKET, LocalFilePath=OUTPUT_FILE, Key=cos_key, PartSize=5, MAXThread=3, EnableMD5=False)
+        uploaded = True
+        break
+    except Exception as e:
+        err_msg = str(e)
+        print(f"[{attempt}/{MAX_RETRIES}] 上传失败: {err_msg[:200]}")
+        if attempt < MAX_RETRIES:
+            wait = min(5 * attempt, 30)  # 递增等待时间，最长30秒
+            print(f"   等待 {wait} 秒后重试...")
+            time.sleep(wait)
+
+if not uploaded:
+    print("错误: 上传失败，已达到最大重试次数")
+    sys.exit(1)
 
 result_url = client.get_presigned_url(Method="GET", Bucket=BUCKET, Key=cos_key, Expired=86400)
 
