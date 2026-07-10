@@ -178,7 +178,7 @@ def reencode_h264(input_path, output_path):
 
 
 def upload_to_cos(local_path, task_id):
-    """上传结果到 COS"""
+    """上传结果到 COS，小文件直接上传，大文件分片上传带重试"""
     from qcloud_cos import CosConfig, CosS3Client
 
     config = CosConfig(Region=COS_REGION, SecretId=COS_SECRET_ID, SecretKey=COS_SECRET_KEY)
@@ -188,14 +188,32 @@ def upload_to_cos(local_path, task_id):
     file_size = os.path.getsize(local_path)
     log(f"上传到 COS: {file_size/1024/1024:.1f} MB, key={cos_key}")
 
-    client.upload_file(
-        Bucket=COS_BUCKET,
-        LocalFilePath=local_path,
-        Key=cos_key,
-        PartSize=10,
-        MAXThread=5,
-        EnableMD5=False,
-    )
+    # 小于 20MB 直接上传，避免分片上传在 GitHub Actions 网络下不稳定
+    if file_size < 20 * 1024 * 1024:
+        log("文件较小，使用 put_object 直接上传")
+        with open(local_path, 'rb') as f:
+            client.put_object(Bucket=COS_BUCKET, Body=f.read(), Key=cos_key)
+    else:
+        # 大文件分片上传，减小分片 + 减少并发线程数提高稳定性
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                log(f"分片上传 (第 {attempt+1}/{max_retries} 次尝试)...")
+                client.upload_file(
+                    Bucket=COS_BUCKET,
+                    LocalFilePath=local_path,
+                    Key=cos_key,
+                    PartSize=5,
+                    MAXThread=2,
+                    EnableMD5=False,
+                )
+                break
+            except Exception as e:
+                log(f"上传失败: {e}")
+                if attempt == max_retries - 1:
+                    raise
+                import time
+                time.sleep(5)
 
     result_url = f"https://{COS_BUCKET}.cos.{COS_REGION}.myqcloud.com/{cos_key}"
     log(f"上传完成: {result_url}")
