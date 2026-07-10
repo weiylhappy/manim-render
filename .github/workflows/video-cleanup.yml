@@ -1,34 +1,45 @@
-name: Video Cleanup
+name: Video Cleanup (去水印/去字幕)
 
 on:
   workflow_dispatch:
     inputs:
       cos_video_url:
-        description: '原始视频 COS 下载地址'
+        description: '原始视频的 COS 下载地址'
         required: true
+        type: string
+      cleanup_type:
+        description: '清理类型: watermark / subtitle / both'
+        required: true
+        type: string
+        default: 'subtitle'
       watermark_region:
-        description: '水印区域 x,y,w,h（可空）'
+        description: '水印区域 x,y,w,h'
         required: false
+        type: string
         default: ''
       subtitle_region:
-        description: '字幕区域 x,y,w,h（可空）'
+        description: '字幕区域 x,y,w,h'
         required: false
+        type: string
         default: ''
-      cleanup_type:
-        description: '处理类型: watermark / subtitle / both'
-        required: true
-        default: 'both'
+      algorithm:
+        description: '修复算法: telea / ns'
+        required: false
+        type: string
+        default: 'telea'
       callback_url:
-        description: '处理完成后回调的 API 地址'
+        description: '回调 API 地址'
         required: false
+        type: string
       task_id:
-        description: '任务ID，用于回调时标识'
+        description: '任务ID'
         required: false
+        type: string
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -37,25 +48,79 @@ jobs:
       - name: 安装系统依赖
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg python3-opencv python3-numpy python3-requests
-          pip3 install --quiet cos-python-sdk-v5
+          sudo apt-get install -y -qq ffmpeg
 
-      - name: 运行去水印/去字幕处理
+      - name: 安装 Python 依赖
+        run: |
+          pip install --quiet opencv-python-headless numpy cos-python-sdk-v5 requests
+
+      - name: 下载原始视频
         env:
-          COS_VIDEO_URL: ${{ inputs.cos_video_url }}
+          VIDEO_URL: ${{ inputs.cos_video_url }}
+        run: |
+          curl -fsSL "$VIDEO_URL" -o input_video.mp4
+          echo "视频大小: $(du -h input_video.mp4 | cut -f1)"
+
+      - name: 运行视频清理
+        env:
+          CLEANUP_TYPE: ${{ inputs.cleanup_type }}
           WATERMARK_REGION: ${{ inputs.watermark_region }}
           SUBTITLE_REGION: ${{ inputs.subtitle_region }}
-          CLEANUP_TYPE: ${{ inputs.cleanup_type }}
-          TASK_ID: ${{ inputs.task_id }}
+          ALGORITHM: ${{ inputs.algorithm }}
+        run: |
+          python3 modelscope/video_cleanup_process.py \
+            --input input_video.mp4 \
+            --output cleaned_output.mp4 \
+            --cleanup_type "$CLEANUP_TYPE" \
+            --watermark_region "$WATERMARK_REGION" \
+            --subtitle_region "$SUBTITLE_REGION" \
+            --algorithm "$ALGORITHM"
+
+      - name: 压缩输出视频
+        run: |
+          ffmpeg -y -i cleaned_output.mp4 \
+            -c:v libx264 -crf 28 -preset veryfast \
+            -c:a aac -b:a 64k \
+            -pix_fmt yuv420p \
+            compressed_output.mp4 2>&1 | tail -3
+          mv compressed_output.mp4 cleaned_output.mp4
+          echo "压缩后大小: $(du -h cleaned_output.mp4 | cut -f1)"
+
+      - name: 上传结果到 COS
+        env:
           COS_SECRET_ID: ${{ secrets.COS_SECRET_ID }}
           COS_SECRET_KEY: ${{ secrets.COS_SECRET_KEY }}
           COS_REGION: ${{ secrets.COS_REGION }}
           COS_BUCKET: ${{ secrets.COS_BUCKET }}
-          CALLBACK_URL: ${{ inputs.callback_url }}
+          TASK_ID: ${{ inputs.task_id }}
         run: |
-          python3 modelscope/video_cleanup_process.py
+          echo "文件列表:"
+          ls -lh *.mp4
+          python3 modelscope/video_cleanup_upload.py
 
-      - name: 失败回调
+      - name: 回调通知（成功）
+        if: ${{ inputs.callback_url != '' }}
+        run: |
+          source $GITHUB_ENV 2>/dev/null || true
+          python3 -c "
+          import os, json, urllib.request
+          callback_url = '${{ inputs.callback_url }}'
+          task_id = '${{ inputs.task_id }}'
+          result_url = os.environ.get('RESULT_URL', '')
+          cos_key = os.environ.get('COS_KEY', '')
+          if not result_url:
+              print('ERROR: RESULT_URL not found')
+              exit(1)
+          payload = json.dumps({'task_id': task_id, 'result_url': result_url, 'cos_key': cos_key, 'status': 'completed'}).encode()
+          req = urllib.request.Request(callback_url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
+          try:
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  print(f'回调成功: {resp.status}')
+          except Exception as e:
+              print(f'回调失败: {e}')
+          "
+
+      - name: 回调通知（失败）
         if: ${{ failure() && inputs.callback_url != '' }}
         env:
           CALLBACK_URL: ${{ inputs.callback_url }}
