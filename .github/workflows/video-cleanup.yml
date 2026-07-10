@@ -40,6 +40,9 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    concurrency:
+      group: video-cleanup-${{ inputs.task_id }}
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
