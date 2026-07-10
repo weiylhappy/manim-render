@@ -38,6 +38,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg python3-opencv python3-numpy python3-requests
+          pip3 install --quiet cos-python-sdk-v5
 
       - name: 运行去水印/去字幕处理
         env:
