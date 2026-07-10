@@ -148,7 +148,7 @@ def merge_audio(video_path, audio_path, output_path):
     cmd = [
         "ffmpeg", "-y",
         "-i", video_path, "-i", audio_path,
-        "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-threads", "1",
+        "-c:v", "libx264", "-crf", "23", "-preset", "medium", "-threads", "1",
         "-c:a", "aac", "-b:a", "128k",
         "-map", "0:v:0", "-map", "1:a:0",
         "-pix_fmt", "yuv420p", "-shortest",
@@ -166,7 +166,7 @@ def reencode_h264(input_path, output_path):
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
-        "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-threads", "1",
+        "-c:v", "libx264", "-crf", "23", "-preset", "medium", "-threads", "1",
         "-pix_fmt", "yuv420p", "-an",
         output_path
     ]
