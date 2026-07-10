@@ -6,30 +6,24 @@ on:
       cos_video_url:
         description: '原始视频 COS 下载地址'
         required: true
-        type: string
       watermark_region:
         description: '水印区域 x,y,w,h（可空）'
         required: false
-        type: string
         default: ''
       subtitle_region:
         description: '字幕区域 x,y,w,h（可空）'
         required: false
-        type: string
         default: ''
       cleanup_type:
         description: '处理类型: watermark / subtitle / both'
         required: true
-        type: string
         default: 'both'
       callback_url:
         description: '处理完成后回调的 API 地址'
         required: false
-        type: string
       task_id:
         description: '任务ID，用于回调时标识'
         required: false
-        type: string
 
 jobs:
   cleanup:
@@ -66,13 +60,4 @@ jobs:
           CALLBACK_URL: ${{ inputs.callback_url }}
           TASK_ID: ${{ inputs.task_id }}
         run: |
-          python3 -c "
-import os, json, urllib.request
-payload = json.dumps({'task_id': os.environ['TASK_ID'], 'result_url': '', 'cos_key': '', 'status': 'failed'}).encode()
-req = urllib.request.Request(os.environ['CALLBACK_URL'], data=payload, headers={'Content-Type': 'application/json'}, method='POST')
-try:
-    urllib.request.urlopen(req, timeout=30)
-    print('失败回调成功')
-except Exception as e:
-    print(f'失败回调异常: {e}')
-"
+          python3 modelscope/video_cleanup_notify_failure.py
