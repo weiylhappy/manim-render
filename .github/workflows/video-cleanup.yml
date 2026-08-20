@@ -103,30 +103,23 @@ jobs:
 
       - name: 回调通知（成功）
         if: ${{ inputs.callback_url != '' }}
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 30
+        env:
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          CALLBACK_SECRET: ${{ secrets.CLEANUP_CALLBACK_SECRET }}
+          TASK_ID: ${{ inputs.task_id }}
         run: |
-          source $GITHUB_ENV 2>/dev/null || true
-          python3 -c "
-          import os, json, urllib.request
-          callback_url = '${{ inputs.callback_url }}'
-          task_id = '${{ inputs.task_id }}'
-          result_url = os.environ.get('RESULT_URL', '')
-          cos_key = os.environ.get('COS_KEY', '')
-          if not result_url:
-              print('ERROR: RESULT_URL not found')
-              exit(1)
-          payload = json.dumps({'task_id': task_id, 'result_url': result_url, 'cos_key': cos_key, 'status': 'completed'}).encode()
-          req = urllib.request.Request(callback_url, data=payload, headers={'Content-Type': 'application/json'}, method='POST')
-          try:
-              with urllib.request.urlopen(req, timeout=30) as resp:
-                  print(f'回调成功: {resp.status}')
-          except Exception as e:
-              print(f'回调失败: {e}')
-          "
+          python3 modelscope/video_cleanup_notify.py
 
       - name: 回调通知（失败）
         if: ${{ failure() && inputs.callback_url != '' }}
         env:
           CALLBACK_URL: ${{ inputs.callback_url }}
+          CALLBACK_SECRET: ${{ secrets.CLEANUP_CALLBACK_SECRET }}
           TASK_ID: ${{ inputs.task_id }}
         run: |
           python3 modelscope/video_cleanup_notify_failure.py
