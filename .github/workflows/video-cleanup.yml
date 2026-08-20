@@ -103,11 +103,6 @@ jobs:
 
       - name: 回调通知（成功）
         if: ${{ inputs.callback_url != '' }}
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 5
-          max_attempts: 3
-          retry_wait_seconds: 30
         env:
           CALLBACK_URL: ${{ inputs.callback_url }}
           CALLBACK_SECRET: ${{ secrets.CLEANUP_CALLBACK_SECRET }}
